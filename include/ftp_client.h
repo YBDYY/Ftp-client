@@ -9,8 +9,17 @@
 
 #define BUFFER_SIZE 1024
 
-int connect_to_server(const char *ip, int port);
-void close_connection(int sock);
+typedef struct {
+    int control_socket;
+    char buffer[BUFFER_SIZE];
+    char server_ip[INET_ADDRSTRLEN];
+    int server_port;
+}FTPClient;
 
+
+FTPClient* ftp_connect(const char *ip, int port);  
+void ftp_disconnect(FTPClient *client);           
+bool ftp_send_command(FTPClient *client, const char *command); 
+bool ftp_read_response(FTPClient *client, char *response, size_t response_size); 
 
 #endif 
