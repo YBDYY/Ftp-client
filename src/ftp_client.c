@@ -1,4 +1,19 @@
 #include "../include/ftp_client.h"
+#include <unistd.h>  // For close()
+#include <stdio.h>   // For printf()
+
+void ftp_disconnect(FTPClient *client) {
+    if (client == NULL) {
+        return;
+    }
+
+   
+    close(client->control_socket);
+    printf("Disconnected from the FTP server.\n");
+    
+   
+    free(client);
+}
 
 FTPClient* ftp_connect(const char *ip, int port) {
     FTPClient *client = malloc(sizeof(FTPClient));
@@ -16,8 +31,8 @@ FTPClient* ftp_connect(const char *ip, int port) {
 
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr)); // Clear memory
-    server_addr.sin_family = AF_INET;            // IPv4
-    server_addr.sin_port = htons(port);          // Convert port to network byte order
+    server_addr.sin_family = AF_INET;             // IPv4
+    server_addr.sin_port = htons(port);           // Convert port to network byte order
 
     if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
         perror("Error: Invalid IP address or not supported");
@@ -32,8 +47,6 @@ FTPClient* ftp_connect(const char *ip, int port) {
         free(client);
         return NULL;
     }
-
-    
 
     return client;
 }
