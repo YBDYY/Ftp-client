@@ -1,0 +1,9 @@
+# Ignore object files
+*.o
+
+# Ignore executable files
+ftp_client
+
+# Ignore other build-related files
+*.a
+*.out
