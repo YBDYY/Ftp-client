@@ -1,18 +1,21 @@
 #include "../include/ftp_client.h"
-#include <unistd.h>  // For close()
-#include <stdio.h>   // For printf()
+#include <unistd.h>  
+#include <stdio.h>   
 
 void ftp_disconnect(FTPClient *client) {
     if (client == NULL) {
         return;
     }
 
-   
-    close(client->control_socket);
-    printf("Disconnected from the FTP server.\n");
-    
-   
+    // Close the control socket (if it's open)
+    if (client->control_socket >= 0) {
+        close(client->control_socket);
+        client->control_socket = -1;  // Prevent double-close
+    }
+
+    // Free the allocated memory for the client
     free(client);
+    printf("Disconnected from the FTP server.\n");
 }
 
 FTPClient* ftp_connect(const char *ip, int port) {
@@ -48,5 +51,43 @@ FTPClient* ftp_connect(const char *ip, int port) {
         return NULL;
     }
 
+    printf("Connected to FTP server at %s:%d\n",ip,port);
     return client;
+}
+
+int ftp_send_command(FTPClient *client,const char *command){
+    if(!client || !command){
+        fprintf(stderr,"Error: Invalid client or command\n");
+        return -1;
+    }
+
+
+   char buffer[512];
+    snprintf(buffer, sizeof(buffer), "%s\r\n", command); // Commands must end with CRLF
+    ssize_t sent = send(client->control_socket, buffer, strlen(buffer), 0);
+    if (sent < 0) {
+        perror("Error: Failed to send command");
+        return -1;
+    }
+
+    printf("Command sent: %s\n", command);
+    return 0;
+
+}
+
+int ftp_read_response(FTPClient *client, char *response, size_t size) {
+    if (!client || !response || size == 0) {
+        fprintf(stderr, "Error: Invalid arguments to read response\n");
+        return -1;
+    }
+
+    ssize_t received = recv(client->control_socket, response, size - 1, 0);
+    if (received < 0) {
+        perror("Error: Failed to read response");
+        return -1;
+    }
+
+    response[received] = '\0'; // Null-terminate the response
+    printf("Response received: %s\n", response);
+    return 0;
 }
