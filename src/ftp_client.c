@@ -93,30 +93,41 @@ int ftp_read_response(FTPClient *client, char *response, size_t size) {
     return 0;
 }
 
-void ftp_command_loop(FTPClient *client){
+void ftp_command_loop(FTPClient *client) {
     char command[256];
     char response[512];
 
     while (1) {
         printf("ftp> ");
-        fgets(command, sizeof(command), stdin);
-        command[strcspn(command, "\n")] = 0;  
-
-      
-        if (strcmp(command, "quit") == 0) {
+        if (fgets(command, sizeof(command), stdin) == NULL) {
+            printf("\nExiting FTP client.\n");
             break;
         }
 
-        
-        if (ftp_send_command(client, command) != 0) {
-            printf("Failed to send command\n");
+        // Remove trailing newline
+        command[strcspn(command, "\n")] = '\0';
+
+        // Exit if the user types "quit" or "exit"
+        if (strcmp(command, "quit") == 0 || strcmp(command, "exit") == 0) {
+            printf("Goodbye!\n");
+            break;
+        }
+
+        // Send command to the server
+        if (ftp_send_command(client, command) < 0) {
+            fprintf(stderr, "Error sending command.\n");
             continue;
         }
 
-
-        if (ftp_read_response(client, response, sizeof(response)) != 0) {
-            printf("Failed to read response\n");
+        // Read response from the server
+        if (ftp_read_response(client, response, sizeof(response)) < 0) {
+            fprintf(stderr, "Error reading response.\n");
             continue;
+        }
+
+        // If the server responds with an error (e.g., "530"), notify the user
+        if (strncmp(response, "530", 3) == 0) {
+            fprintf(stderr, "Server error: %s\n", response);
         }
     }
 }
