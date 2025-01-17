@@ -55,6 +55,7 @@ FTPClient* ftp_connect(const char *ip, int port) {
     return client;
 }
 
+
 int ftp_send_command(FTPClient *client,const char *command){
     if(!client || !command){
         fprintf(stderr,"Error: Invalid client or command\n");
@@ -90,4 +91,32 @@ int ftp_read_response(FTPClient *client, char *response, size_t size) {
     response[received] = '\0'; // Null-terminate the response
     printf("Response received: %s\n", response);
     return 0;
+}
+
+void ftp_command_loop(FTPClient *client){
+    char command[256];
+    char response[512];
+
+    while (1) {
+        printf("ftp> ");
+        fgets(command, sizeof(command), stdin);
+        command[strcspn(command, "\n")] = 0;  
+
+      
+        if (strcmp(command, "quit") == 0) {
+            break;
+        }
+
+        
+        if (ftp_send_command(client, command) != 0) {
+            printf("Failed to send command\n");
+            continue;
+        }
+
+
+        if (ftp_read_response(client, response, sizeof(response)) != 0) {
+            printf("Failed to read response\n");
+            continue;
+        }
+    }
 }
