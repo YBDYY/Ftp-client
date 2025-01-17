@@ -7,9 +7,8 @@ int main() {
     if (client) {
         printf("Connected to the FTP server at 127.0.0.1:21\n");
 
-        // Perform any necessary FTP actions here
-
-        // Call ftp_disconnect to clean up and free resources
+        ftp_command_loop(client);
+       
         ftp_disconnect(client);
     } else {
         printf("Failed to connect to the FTP server.\n");
