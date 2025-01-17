@@ -40,7 +40,7 @@ void ftp_disconnect(FTPClient *client);
  * @param command: The FTP command to send.
  * @return true if the command was sent successfully, false otherwise.
  */
-bool ftp_send_command(FTPClient *client, const char *command);
+int ftp_send_command(FTPClient *client, const char *command);
 
 /**
  * Read the server's response.
@@ -49,6 +49,9 @@ bool ftp_send_command(FTPClient *client, const char *command);
  * @param response_size: Size of the response buffer.
  * @return true if the response was read successfully, false otherwise.
  */
-bool ftp_read_response(FTPClient *client, char *response, size_t response_size);
+int ftp_read_response(FTPClient *client, char *response, size_t response_size);
+
+
+void ftp_command_loop(FTPClient *client);
 
 #endif // FTP_CLIENT_H
