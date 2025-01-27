@@ -51,7 +51,7 @@ FTPClient* ftp_connect(const char *ip, int port) {
         return NULL;
     }
 
-    printf("Connected to FTP server at %s:%d\n",ip,port);
+    
     return client;
 }
 
@@ -88,10 +88,18 @@ int ftp_read_response(FTPClient *client, char *response, size_t size) {
         return -1;
     }
 
-    response[received] = '\0'; // Null-terminate the response
+    response[received] = '\0';
     printf("Response received: %s\n", response);
-    return 0;
+
+   
+    if (response[0] == '4' || response[0] == '5') {
+        fprintf(stderr, "Server error: %s\n", response);
+        return -1;  
+    }
+
+    return 0;  
 }
+
 
 void ftp_command_loop(FTPClient *client) {
     char command[256];
@@ -104,30 +112,218 @@ void ftp_command_loop(FTPClient *client) {
             break;
         }
 
-        // Remove trailing newline
         command[strcspn(command, "\n")] = '\0';
 
-        // Exit if the user types "quit" or "exit"
         if (strcmp(command, "quit") == 0 || strcmp(command, "exit") == 0) {
             printf("Goodbye!\n");
             break;
         }
 
-        // Send command to the server
+        if (strncmp(command, "get ", 4) == 0) {
+            const char *filename = command + 4;
+            if (ftp_get(client, filename) < 0) {
+                fprintf(stderr, "Error: Failed to download file '%s'\n", filename);
+            }
+            continue;
+        }
+
+        if (strncmp(command, "put ", 4) == 0) {
+            const char *filename = command + 4;
+            if (ftp_put(client, filename) < 0) {
+                fprintf(stderr, "Error: Failed to upload file '%s'\n", filename);
+            }
+            continue;
+        }
+
+        // For other commands
         if (ftp_send_command(client, command) < 0) {
             fprintf(stderr, "Error sending command.\n");
             continue;
         }
 
-        // Read response from the server
         if (ftp_read_response(client, response, sizeof(response)) < 0) {
             fprintf(stderr, "Error reading response.\n");
             continue;
         }
 
-        // If the server responds with an error (e.g., "530"), notify the user
         if (strncmp(response, "530", 3) == 0) {
             fprintf(stderr, "Server error: %s\n", response);
         }
     }
+}
+
+
+int ftp_send_pasv(FTPClient *client) {
+    const char *command = "PASV";
+    char response[512];
+
+    
+    if (ftp_send_command(client, command) < 0) {
+        return -1;
+    }
+
+    
+    if (ftp_read_response(client, response, sizeof(response)) < 0) {
+        return -1;
+    }
+
+    
+    int a, b, c, d, e, f;
+    if (sscanf(response, "227 Entering Passive Mode (%d,%d,%d,%d,%d,%d)",
+               &a, &b, &c, &d, &e, &f) == 6) {
+        
+        char ip[16];
+        snprintf(ip, sizeof(ip), "%d.%d.%d.%d", a, b, c, d);
+
+        
+        int port = e * 256 + f;
+
+        
+        printf("PASV response: IP = %s, Port = %d\n", ip, port);
+
+        
+
+        return port;  
+    }
+
+    fprintf(stderr, "Failed to parse PASV response: %s\n", response);
+    return -1;
+}
+
+
+int ftp_get(FTPClient *client, const char *filename) {
+    int port = ftp_send_pasv(client);  
+    if (port < 0) {
+        return -1;  
+    }
+
+   
+    int data_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (data_socket < 0) {
+        perror("Error: Failed to create data socket");
+        return -1;
+    }
+
+    struct sockaddr_in data_addr;
+    memset(&data_addr, 0, sizeof(data_addr));
+    data_addr.sin_family = AF_INET;
+    data_addr.sin_port = htons(port);
+    data_addr.sin_addr.s_addr = inet_addr("127.0.0.1");  
+
+    
+    if (connect(data_socket, (struct sockaddr *)&data_addr, sizeof(data_addr)) < 0) {
+        perror("Error: Failed to connect to data port");
+        close(data_socket);
+        return -1;
+    }
+
+    
+    char command[512];
+    snprintf(command, sizeof(command), "RETR %s", filename);
+    if (ftp_send_command(client, command) < 0) {
+        close(data_socket);
+        return -1;
+    }
+
+    
+    char response[512];
+    if (ftp_read_response(client, response, sizeof(response)) < 0) {
+        close(data_socket);
+        return -1;
+    }
+
+    
+    FILE *file = fopen(filename, "wb");
+    if (!file) {
+        perror("ERROR: Failed to open file for writing");
+        close(data_socket);
+        return -1;
+    }
+
+    
+    char buffer[1024];
+    ssize_t bytes_received;
+    while ((bytes_received = recv(data_socket, buffer, sizeof(buffer), 0)) > 0) {
+        fwrite(buffer, 1, bytes_received, file);
+    }
+
+    fclose(file);
+    close(data_socket);
+
+   
+    if (ftp_read_response(client, response, sizeof(response)) < 0) {
+        return -1;
+    }
+
+    printf("File %s downloaded successfully.\n", filename);
+    return 0;
+}
+
+
+
+int ftp_put(FTPClient *client, const char *filename) {
+    
+    int port = ftp_send_pasv(client);
+    if (port < 0) {
+        return -1;  
+    }
+
+    
+    int data_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (data_socket < 0) {
+        perror("Error: Failed to create data socket");
+        return -1;
+    }
+
+    struct sockaddr_in data_addr;
+    memset(&data_addr, 0, sizeof(data_addr));
+    data_addr.sin_family = AF_INET;
+    data_addr.sin_port = htons(port);
+    data_addr.sin_addr.s_addr = inet_addr("127.0.0.1");  
+
+    if (connect(data_socket, (struct sockaddr *)&data_addr, sizeof(data_addr)) < 0) {
+        perror("Error: Failed to connect to data port");
+        close(data_socket);
+        return -1;
+    }
+
+   
+    char command[512];
+    snprintf(command, sizeof(command), "STOR %s", filename);
+    if (ftp_send_command(client, command) < 0) {
+        close(data_socket);
+        return -1;
+    }
+
+    
+    char response[512];
+    if (ftp_read_response(client, response, sizeof(response)) < 0) {
+        close(data_socket);
+        return -1;
+    }
+
+   
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Error: Failed to open file for reading");
+        close(data_socket);
+        return -1;
+    }
+
+    char buffer[1024];
+    ssize_t bytes_read;
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        send(data_socket, buffer, bytes_read, 0);
+    }
+
+    fclose(file);
+    close(data_socket);
+
+    
+    if (ftp_read_response(client, response, sizeof(response)) < 0) {
+        return -1;
+    }
+
+    printf("File %s uploaded successfully.\n", filename);
+    return 0;
 }
